@@ -1,0 +1,66 @@
+# ==============================================================================
+# Gitignore for Skyline Sprint (C++ PS4 / Desktop SDL2 Homebrew)
+# ==============================================================================
+
+# --- OS / System Metadata ---
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
+*~
+*.swp
+*.tmp
+
+# --- IDEs and Editors ---
+.vscode/
+.vs/
+.idea/
+*.user
+*.suo
+*.sln
+*.vcxproj
+*.filters
+
+# --- Build Directories & Host Outputs ---
+build/
+bin/
+out/
+dist/
+
+# --- Compiled Objects & Dependencies ---
+*.o
+*.obj
+*.d
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+
+# --- CMake Artifacts ---
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# --- PS4 Target Build Output & Package Staging ---
+*.elf
+*.oelf
+*.bin
+*.prx
+*.pkg
+# Ignore eboot.bin in root or package directory if copied there
+eboot.bin
+
+# --- Generated Assets & Temporary Scripts ---
+assets/generated/
+/home/jica/repo/skyline-sprint/scratch/
+/home/jica/repo/skyline-sprint/.gemini/
+
+# --- Logs & Test Diagnostics ---
+*.log
+logs/
