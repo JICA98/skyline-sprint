@@ -36,11 +36,11 @@ bool Game::Init(SDL_Renderer* renderer, SDL_Window* window) {
     }
 
     // Load textures
-    playerTex = Render::LoadTexture(renderer, "assets/images/player.tga");
-    platformTex = Render::LoadTexture(renderer, "assets/images/platform.tga");
+    playerTex = Render::LoadTexture(renderer, "assets/images/player.png");
+    platformTex = Render::LoadTexture(renderer, "assets/images/platform.png");
     warningTex = Render::LoadTexture(renderer, "assets/images/warning.tga");
     shardTex = Render::LoadTexture(renderer, "assets/images/shard.tga");
-    enemyTex = Render::LoadTexture(renderer, "assets/images/enemy.tga");
+    enemyTex = Render::LoadTexture(renderer, "assets/images/enemy.png");
 
     if (!playerTex || !platformTex || !warningTex || !shardTex || !enemyTex) {
         Logger::Log(LogLevel::Error, "Game", "Failed to load gameplay textures.");
