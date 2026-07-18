@@ -56,11 +56,6 @@ static bool LoadAndConvertWAV(const std::string& path, SDL_AudioSpec& deviceSpec
 }
 
 bool AudioManager::Init() {
-#ifdef PS4
-    initialized = false;
-    Logger::Log(LogLevel::Info, "Audio", "Diagnostic bypass: Audio disabled on PS4.");
-    return true;
-#endif
     if (initialized) return true;
 
     // Zero out active sounds list
