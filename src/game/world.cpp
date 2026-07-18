@@ -380,9 +380,7 @@ void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex, SDL_Texture
                             tileWidth,
                             tileHeight
                         };
-                        // Draw top edge tile if r == 0
-                        SDL_Rect srcRect = { 0, 0, 32, 32 };
-                        SDL_RenderCopy(renderer, tex, &srcRect, &tileDst);
+                        SDL_RenderCopy(renderer, tex, NULL, &tileDst);
                     }
                 }
             }
@@ -396,10 +394,10 @@ void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex, SDL_Texture
             }
 
             SDL_Rect dstRect = {
-                static_cast<int>(shard.box.x - cameraX),
-                static_cast<int>(shard.box.y - cameraY),
-                16,
-                16
+                static_cast<int>(shard.box.x - cameraX - 8.0f),
+                static_cast<int>(shard.box.y - cameraY - 8.0f),
+                32,
+                32
             };
             SDL_RenderCopy(renderer, shardTex, NULL, &dstRect);
         }
@@ -411,10 +409,10 @@ void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex, SDL_Texture
             }
 
             SDL_Rect dstRect = {
-                static_cast<int>(drone.box.x - cameraX),
-                static_cast<int>(drone.box.y - cameraY),
-                32,
-                32
+                static_cast<int>(drone.box.x - cameraX - 16.0f),
+                static_cast<int>(drone.box.y - cameraY - 16.0f),
+                64,
+                64
             };
             SDL_RenderCopy(renderer, enemyTex, NULL, &dstRect);
         }

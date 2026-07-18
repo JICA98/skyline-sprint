@@ -3,7 +3,7 @@
 	<volume>
 		<volume_type>pkg_ps4_app</volume_type>
 		<volume_id>PS4VOLUME</volume_id>
-		<volume_ts>2026-07-18 05:03:09</volume_ts>
+		<volume_ts>2026-07-18 05:22:38</volume_ts>
 		<package content_id="IV0000-SKYS00001_00-SKYLINEGP4000000" passcode="00000000000000000000000000000000"
 			storage_type="digital50" app_type="full" />
 		<chunk_info chunk_count="1" scenario_count="1">
@@ -25,11 +25,16 @@
 		<file targ_path="assets/audio/failure.wav" orig_path="assets/audio/failure.wav" />
 		<file targ_path="assets/audio/jump.wav" orig_path="assets/audio/jump.wav" />
 		<file targ_path="assets/audio/pickup.wav" orig_path="assets/audio/pickup.wav" />
-		<file targ_path="assets/images/enemy.png" orig_path="assets/images/enemy.png" />
+		<file targ_path="assets/images/enemy.tga" orig_path="assets/images/enemy.tga" />
 		<file targ_path="assets/images/font.tga" orig_path="assets/images/font.tga" />
-		<file targ_path="assets/images/platform.png" orig_path="assets/images/platform.png" />
-		<file targ_path="assets/images/player.png" orig_path="assets/images/player.png" />
+		<file targ_path="assets/images/platform.tga" orig_path="assets/images/platform.tga" />
+		<file targ_path="assets/images/runner_idle.tga" orig_path="assets/images/runner_idle.tga" />
+		<file targ_path="assets/images/runner_jump.tga" orig_path="assets/images/runner_jump.tga" />
+		<file targ_path="assets/images/runner_run.tga" orig_path="assets/images/runner_run.tga" />
 		<file targ_path="assets/images/shard.tga" orig_path="assets/images/shard.tga" />
+		<file targ_path="assets/images/spacesuit_idle.tga" orig_path="assets/images/spacesuit_idle.tga" />
+		<file targ_path="assets/images/spacesuit_jump.tga" orig_path="assets/images/spacesuit_jump.tga" />
+		<file targ_path="assets/images/spacesuit_run.tga" orig_path="assets/images/spacesuit_run.tga" />
 		<file targ_path="assets/images/splash.tga" orig_path="assets/images/splash.tga" />
 		<file targ_path="assets/images/warning.tga" orig_path="assets/images/warning.tga" />	</files>
 	<rootdir>

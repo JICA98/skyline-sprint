@@ -143,19 +143,16 @@ AABB Player::GetPrevAABB() const {
 void Player::Render(SDL_Renderer* renderer, SDL_Texture* spriteTexture, float cameraX, float cameraY) {
     if (!alive) return;
 
-    // Draw sprite using TGA player texture
-    SDL_Rect srcRect = { 0, 0, 32, 32 };
-    
     // Draw legs bobbing based on animTime
     int legOffset = static_cast<int>(sinf(animTime)) * 2;
     SDL_Rect dstRect = {
-        static_cast<int>(x - cameraX),
-        static_cast<int>(y - cameraY) + legOffset,
-        32,
-        32
+        static_cast<int>(x - cameraX - 16.0f),
+        static_cast<int>(y - cameraY - 16.0f) + legOffset,
+        64,
+        64
     };
 
     // Flip horizontal if facing left
     SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
-    SDL_RenderCopyEx(renderer, spriteTexture, &srcRect, &dstRect, 0.0, NULL, flip);
+    SDL_RenderCopyEx(renderer, spriteTexture, NULL, &dstRect, 0.0, NULL, flip);
 }

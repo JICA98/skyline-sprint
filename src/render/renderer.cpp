@@ -103,6 +103,8 @@ SDL_Texture* Render::LoadTexture(SDL_Renderer* renderer, const std::string& rela
         return nullptr;
     }
 
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+
     return texture;
 }
 

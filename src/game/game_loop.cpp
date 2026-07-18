@@ -7,7 +7,7 @@
 
 Game::Game() : currentState(GameState::Boot), tickCount(0), currentSeed(0), accumulator(0.0f),
                menuIndex(0), menuRepeatTimer(0), settingAudio(true), settingScreenShake(true),
-               settingParticles(1), settingShowDiagnostics(false), testModeAuto(false),
+               settingParticles(1), settingShowDiagnostics(false), settingCharacter(0), testModeAuto(false),
                testModeStress(false), testSeed(0xDEADC0DE), testSeedIndex(0),
                shakeTime(0.0f), shakeIntensity(0.0f), shakeOffsetX(0.0f), shakeOffsetY(0.0f) {
     for (int i = 0; i < MAX_PARTICLES; ++i) {
@@ -36,13 +36,18 @@ bool Game::Init(SDL_Renderer* renderer, SDL_Window* window) {
     }
 
     // Load textures
-    playerTex = Render::LoadTexture(renderer, "assets/images/player.png");
-    platformTex = Render::LoadTexture(renderer, "assets/images/platform.png");
+    runnerIdleTex = Render::LoadTexture(renderer, "assets/images/runner_idle.tga");
+    runnerRunTex = Render::LoadTexture(renderer, "assets/images/runner_run.tga");
+    runnerJumpTex = Render::LoadTexture(renderer, "assets/images/runner_jump.tga");
+    spacesuitIdleTex = Render::LoadTexture(renderer, "assets/images/spacesuit_idle.tga");
+    spacesuitRunTex = Render::LoadTexture(renderer, "assets/images/spacesuit_run.tga");
+    spacesuitJumpTex = Render::LoadTexture(renderer, "assets/images/spacesuit_jump.tga");
+    platformTex = Render::LoadTexture(renderer, "assets/images/platform.tga");
     warningTex = Render::LoadTexture(renderer, "assets/images/warning.tga");
     shardTex = Render::LoadTexture(renderer, "assets/images/shard.tga");
-    enemyTex = Render::LoadTexture(renderer, "assets/images/enemy.png");
+    enemyTex = Render::LoadTexture(renderer, "assets/images/enemy.tga");
 
-    if (!playerTex || !platformTex || !warningTex || !shardTex || !enemyTex) {
+    if (!runnerIdleTex || !runnerRunTex || !runnerJumpTex || !spacesuitIdleTex || !spacesuitRunTex || !spacesuitJumpTex || !platformTex || !warningTex || !shardTex || !enemyTex) {
         Logger::Log(LogLevel::Error, "Game", "Failed to load gameplay textures.");
         ChangeState(GameState::FatalError);
         return false;
@@ -67,7 +72,12 @@ bool Game::Init(SDL_Renderer* renderer, SDL_Window* window) {
 
 void Game::Shutdown() {
     // Destroy textures
-    if (playerTex) SDL_DestroyTexture(playerTex);
+    if (runnerIdleTex) SDL_DestroyTexture(runnerIdleTex);
+    if (runnerRunTex) SDL_DestroyTexture(runnerRunTex);
+    if (runnerJumpTex) SDL_DestroyTexture(runnerJumpTex);
+    if (spacesuitIdleTex) SDL_DestroyTexture(spacesuitIdleTex);
+    if (spacesuitRunTex) SDL_DestroyTexture(spacesuitRunTex);
+    if (spacesuitJumpTex) SDL_DestroyTexture(spacesuitJumpTex);
     if (platformTex) SDL_DestroyTexture(platformTex);
     if (warningTex) SDL_DestroyTexture(warningTex);
     if (shardTex) SDL_DestroyTexture(shardTex);
@@ -101,7 +111,7 @@ bool Game::RunFrame(SDL_Renderer* renderer, float frameDelta) {
     int maxItems = 0;
     if (currentState == GameState::Title)         maxItems = 5;
     else if (currentState == GameState::Pause)     maxItems = 5;
-    else if (currentState == GameState::Settings)  maxItems = 6;
+    else if (currentState == GameState::Settings)  maxItems = 7;
     else if (currentState == GameState::TestModes) maxItems = 5;
 
     // Handle menu D-pad Up/Down repeat scrolling
@@ -246,10 +256,13 @@ bool Game::RunFrame(SDL_Renderer* renderer, float frameDelta) {
             else if (menuIndex == 2) settingParticles = (settingParticles + 1) % 3;
             else if (menuIndex == 3) settingShowDiagnostics = !settingShowDiagnostics;
             else if (menuIndex == 4) {
+                settingCharacter = (settingCharacter + 1) % 2; // 0: Runner, 1: Spacesuit
+            }
+            else if (menuIndex == 5) {
                 highScore = 0;
                 Logger::Log(LogLevel::Info, "Settings", "High score session reset.");
             }
-            else if (menuIndex == 5) {
+            else if (menuIndex == 6) {
                 ChangeState(GameState::Title);
                 menuIndex = 2; // return focus to settings item
             }
@@ -434,6 +447,26 @@ void Game::UpdateSimulation() {
 }
 
 void Game::RenderScene(SDL_Renderer* renderer) {
+    // Determine active texture for the player sprite based on settingCharacter and movement state
+    SDL_Texture* activePlayerTex = nullptr;
+    if (settingCharacter == 0) {
+        if (!player.grounded) {
+            activePlayerTex = runnerJumpTex;
+        } else if (player.vx != 0.0f) {
+            activePlayerTex = runnerRunTex;
+        } else {
+            activePlayerTex = runnerIdleTex;
+        }
+    } else {
+        if (!player.grounded) {
+            activePlayerTex = spacesuitJumpTex;
+        } else if (player.vx != 0.0f) {
+            activePlayerTex = spacesuitRunTex;
+        } else {
+            activePlayerTex = spacesuitIdleTex;
+        }
+    }
+
     // 1. Draw solid background based on state
     uint32_t bgHex = 0x111827; // Default Deep twilight (#111827)
 
@@ -496,10 +529,11 @@ void Game::RenderScene(SDL_Renderer* renderer) {
             // Draw a live running Pulse bobbing preview on the right
             Render::DrawRect(renderer, safe.x + 900, safe.y + 420, 700, 300, 0x1F2937, true); // Far skyline backdrop
             Render::DrawRect(renderer, safe.x + 900, safe.y + 420, 700, 10, 0x94A3B8, true); // Platform top
-            int bobOffset = static_cast<int>(sinf(static_cast<float>(tickCount) * 0.3f) * 4.0f);
-            SDL_Rect pSrc = { 0, 0, 32, 32 };
-            SDL_Rect pDst = { safe.x + 1200, safe.y + 420 - 32 + bobOffset, 32, 32 };
-            SDL_RenderCopy(renderer, playerTex, &pSrc, &pDst);
+            
+            // Render player preview
+            int bobOffset = static_cast<int>(sinf(tickCount * 0.1f) * 8.0f);
+            SDL_Rect pDst = { safe.x + 1200, safe.y + 420 - 64 + bobOffset, 64, 64 };
+            SDL_RenderCopy(renderer, activePlayerTex, NULL, &pDst);
 
             // Footer
             Render::DrawText(renderer, "D-pad/Stick: Move   Cross/Enter: Select   Circle/Esc: Exit", safe.x + 100, safe.y + 850, 2, 0xCBD5E1);
@@ -511,24 +545,24 @@ void Game::RenderScene(SDL_Renderer* renderer) {
 
             world.Render(renderer, platformTex, warningTex, shardTex, enemyTex, renderCamX, renderCamY);
             RenderParticles(renderer, renderCamX);
-            player.Render(renderer, playerTex, renderCamX, renderCamY);
+            player.Render(renderer, activePlayerTex, renderCamX, renderCamY);
             
             // Render HUD metrics
-            Render::DrawText(renderer, "SCORE: " + std::to_string(score), safe.x + 20, safe.y + 20, 3, 0xFACC15);
+            Render::DrawText(renderer, "SCORE: " + std::to_string(score), safe.x + 40, safe.y + 40, 5, 0xFACC15);
             
             // Format multiplier to 1 decimal place
             char multBuf[16];
             snprintf(multBuf, sizeof(multBuf), "x%.1f", multiplier);
-            Render::DrawText(renderer, "MULT: " + std::string(multBuf), safe.x + 450, safe.y + 20, 3, 0x22D3EE);
+            Render::DrawText(renderer, "MULT: " + std::string(multBuf), safe.x + 600, safe.y + 40, 5, 0x22D3EE);
             
             int distMeters = static_cast<int>(distanceTraveled / 10.0f);
-            Render::DrawText(renderer, "DIST: " + std::to_string(distMeters) + "m", safe.x + 800, safe.y + 20, 3, 0xF8FAFC);
+            Render::DrawText(renderer, "DIST: " + std::to_string(distMeters) + "m", safe.x + 1100, safe.y + 40, 5, 0xF8FAFC);
             break;
         }
         case GameState::Pause: {
             // Render underlying frozen gameplay in background
             world.Render(renderer, platformTex, warningTex, shardTex, enemyTex, cameraX);
-            player.Render(renderer, playerTex, cameraX);
+            player.Render(renderer, activePlayerTex, cameraX);
 
             // Draw translucent dark overlay
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -580,15 +614,16 @@ void Game::RenderScene(SDL_Renderer* renderer) {
             else if (settingParticles == 1) particleStr += "MEDIUM";
             else                            particleStr += "HIGH";
             std::string diagStr = std::string("SHOW DIAGNOSTICS: ") + (settingShowDiagnostics ? "ON" : "OFF");
+            std::string charStr = std::string("CHARACTER: ") + (settingCharacter == 0 ? "CYBER RUNNER" : "SPACESUIT");
             std::string resetStr = "RESET SESSION HIGHEST SCORE";
             std::string backStr = "BACK TO MENU";
 
-            std::string items[] = { audioStr, shakeStr, particleStr, diagStr, resetStr, backStr };
-            for (int i = 0; i < 6; ++i) {
+            std::string items[] = { audioStr, shakeStr, particleStr, diagStr, charStr, resetStr, backStr };
+            for (int i = 0; i < 7; ++i) {
                 bool focus = (menuIndex == i);
                 std::string prefix = focus ? "> " : "  ";
                 uint32_t color = focus ? 0xA78BFA : 0xF8FAFC;
-                Render::DrawText(renderer, prefix + items[i], safe.x + 100, safe.y + 260 + i * 70, 4, color);
+                Render::DrawText(renderer, prefix + items[i], safe.x + 100, safe.y + 260 + i * 65, 4, color);
             }
 
             Render::DrawText(renderer, "Use D-pad Left/Right or Cross to toggle values.", safe.x + 100, safe.y + 800, 2, 0xCBD5E1);

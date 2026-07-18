@@ -74,6 +74,7 @@ private:
     bool settingScreenShake;
     int settingParticles; // 0=LOW, 1=MED, 2=HIGH
     bool settingShowDiagnostics;
+    int settingCharacter; // 0=Runner, 1=Spacesuit
 
     // Test Modes State
     bool testModeAuto;
@@ -108,7 +109,12 @@ private:
     void UpdateScreenShake(float deltaTime);
 
     // Sprite Textures
-    SDL_Texture* playerTex;
+    SDL_Texture* runnerIdleTex;
+    SDL_Texture* runnerRunTex;
+    SDL_Texture* runnerJumpTex;
+    SDL_Texture* spacesuitIdleTex;
+    SDL_Texture* spacesuitRunTex;
+    SDL_Texture* spacesuitJumpTex;
     SDL_Texture* platformTex;
     SDL_Texture* warningTex;
     SDL_Texture* shardTex;
