@@ -658,7 +658,11 @@ void Game::RenderScene(SDL_Renderer* renderer) {
             bool padOk = Input::IsControllerConnected();
             Render::DrawText(renderer, "Pad Subsystem:      " + std::string(padOk ? "OK (ACTIVE)" : "NOT FOUND (KEYBOARD FALLBACK)"), safe.x + 100, safe.y + 490, 3, padOk ? 0x4ADE80 : 0xFB7185);
             Render::DrawText(renderer, "Audio Subsystem:    OK (SDL MIXER fallbacks active)", safe.x + 100, safe.y + 540, 3, 0x4ADE80);
-            Render::DrawText(renderer, "Log File Path:      /home/jica/.gemini/antigravity-cli (circular memory-backed)", safe.x + 100, safe.y + 590, 3, 0x94A3B8);
+#ifdef PS4
+            Render::DrawText(renderer, "Log File Path:      stdout / TTY (circular memory-backed)", safe.x + 100, safe.y + 590, 3, 0x94A3B8);
+#else
+            Render::DrawText(renderer, "Log File Path:      stdout / stderr (circular memory-backed)", safe.x + 100, safe.y + 590, 3, 0x94A3B8);
+#endif
 
             Render::DrawText(renderer, "Circle / Backspace / Cross: Return to title menu", safe.x + 100, safe.y + 800, 2, 0xCBD5E1);
             break;
