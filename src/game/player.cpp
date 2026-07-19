@@ -140,19 +140,28 @@ AABB Player::GetPrevAABB() const {
     return { prevX, prevY, w, h };
 }
 
-void Player::Render(SDL_Renderer* renderer, SDL_Texture* spriteTexture, float cameraX, float cameraY) {
-    if (!alive) return;
+void Player::Render(SDL_Renderer* renderer, SDL_Texture* spriteTexture,
+                    float cameraX, float cameraY, float alpha) {
+    if (!alive || !spriteTexture) return;
 
-    // Draw legs bobbing based on animTime
-    int legOffset = static_cast<int>(sinf(animTime)) * 2;
+    if (alpha < 0.0f) alpha = 0.0f;
+    if (alpha > 1.0f) alpha = 1.0f;
+
+    const float renderX = prevX + (x - prevX) * alpha;
+    const float renderY = prevY + (y - prevY) * alpha;
+    const int legOffset = static_cast<int>(sinf(animTime) * 2.0f);
+
     SDL_Rect dstRect = {
-        static_cast<int>(x - cameraX - 16.0f),
-        static_cast<int>(y - cameraY - 16.0f) + legOffset,
+        static_cast<int>(renderX - cameraX - 16.0f),
+        static_cast<int>(renderY - cameraY - 16.0f) + legOffset,
         64,
         64
     };
 
-    // Flip horizontal if facing left
-    SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
-    SDL_RenderCopyEx(renderer, spriteTexture, NULL, &dstRect, 0.0, NULL, flip);
+    if (facingRight) {
+        SDL_RenderCopy(renderer, spriteTexture, nullptr, &dstRect);
+    } else {
+        SDL_RenderCopyEx(renderer, spriteTexture, nullptr, &dstRect,
+                         0.0, nullptr, SDL_FLIP_HORIZONTAL);
+    }
 }

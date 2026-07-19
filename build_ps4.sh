@@ -20,7 +20,7 @@ if [[ ! -f src/main.cpp || ! -f src/game/game_loop.cpp ]]; then
     exit 1
 fi
 
-if ! grep -q 'SkylineSprint-0.1.2-final' src/platform/platform.cpp; then
+if ! grep -q 'SkylineSprint-0.1.3-perf' src/platform/platform.cpp; then
     echo "ERROR: final framebuffer build marker is missing." >&2
     exit 1
 fi
@@ -63,7 +63,7 @@ if [[ ! -f package/sce_sys/about/right.sprx ]]; then
 fi
 
 echo "Building Skyline Sprint final framebuffer build..."
-echo "Source marker: SkylineSprint-0.1.2-final"
+echo "Source marker: SkylineSprint-0.1.3-perf"
 echo "Toolchain: $OO_PS4_TOOLCHAIN"
 
 # Never reuse an old eboot.bin or package.
@@ -79,7 +79,7 @@ if [[ ! -s package/eboot.bin ]]; then
 fi
 
 if command -v strings >/dev/null 2>&1; then
-    if ! strings package/eboot.bin | grep 'SkylineSprint-0.1.2-final' >/dev/null; then
+    if ! strings package/eboot.bin | grep 'SkylineSprint-0.1.3-perf' >/dev/null; then
         echo "ERROR: generated eboot.bin does not contain the final build marker." >&2
         exit 1
     fi
@@ -96,4 +96,4 @@ sha256sum package/eboot.bin "$pkg" | tee dist/SHA256SUMS
 echo "Build complete:"
 echo "  $ROOT_DIR/package/eboot.bin"
 echo "  $ROOT_DIR/$pkg"
-echo "Expected runtime marker: [PS4-FB-FINAL]"
+echo "Expected runtime marker: [PS4-PERF]"

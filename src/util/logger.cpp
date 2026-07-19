@@ -10,6 +10,7 @@ uint32_t Logger::lastWarningTick = 0;
 
 void Logger::Init(uint32_t seed) {
     entries.clear();
+    entries.reserve(MAX_ENTRIES);
     currentTick = 0;
     currentSeed = seed;
     lastWarningMessage = "";
@@ -18,6 +19,13 @@ void Logger::Init(uint32_t seed) {
 }
 
 void Logger::Log(LogLevel level, const std::string& subsystem, const std::string& message) {
+#ifdef PS4
+    // Debug TTY traffic is disproportionately expensive under emulation and can
+    // create visible hitches on every landing/jump.
+    if (level == LogLevel::Debug) {
+        return;
+    }
+#endif
     // Prevent per-frame repetitive warnings (rate limit: once per 60 ticks/1 sec for exact same message)
     if (level == LogLevel::Warning) {
         if (message == lastWarningMessage && (currentTick - lastWarningTick < 60)) {

@@ -5,11 +5,13 @@ InputState Input::state = {};
 SDL_Joystick* Input::joystick = nullptr;
 bool Input::useHeadlessInput = false;
 bool Input::headlessState[static_cast<int>(InputAction::Count)] = {};
+uint32_t Input::lastConnectionPollTick = UINT32_MAX;
 
 void Input::Init() {
     state = {};
     joystick = nullptr;
     useHeadlessInput = false;
+    lastConnectionPollTick = UINT32_MAX;
     for (int i = 0; i < static_cast<int>(InputAction::Count); ++i) {
         headlessState[i] = false;
     }
@@ -50,21 +52,34 @@ void Input::Update(uint32_t currentTick) {
         return;
     }
 
-    // 3. Monitor controller connection changes
-    int numJoysticks = SDL_NumJoysticks();
-    if (numJoysticks > 0 && !joystick) {
-        joystick = SDL_JoystickOpen(0);
-        if (joystick) {
-            state.controllerConnected = true;
-            Logger::Log(LogLevel::Info, "Input", "Controller connected: " + std::string(SDL_JoystickName(joystick)));
+    // 3. Monitor controller changes at 1 Hz instead of calling the device
+    // enumeration APIs every rendered frame.
+    const bool tickWrapped = currentTick < lastConnectionPollTick;
+    const bool connectionPollDue =
+        lastConnectionPollTick == UINT32_MAX || tickWrapped ||
+        (currentTick - lastConnectionPollTick) >= 60;
+
+    if (connectionPollDue) {
+        lastConnectionPollTick = currentTick;
+
+        if (joystick && !SDL_JoystickGetAttached(joystick)) {
+            SDL_JoystickClose(joystick);
+            joystick = nullptr;
+            state.controllerConnected = false;
+            state.leftStickX = 0;
+            state.leftStickY = 0;
+            Logger::Log(LogLevel::Info, "Input", "Controller disconnected.");
         }
-    } else if (numJoysticks == 0 && joystick) {
-        SDL_JoystickClose(joystick);
-        joystick = nullptr;
-        state.controllerConnected = false;
-        state.leftStickX = 0;
-        state.leftStickY = 0;
-        Logger::Log(LogLevel::Info, "Input", "Controller disconnected.");
+
+        if (!joystick && SDL_NumJoysticks() > 0) {
+            joystick = SDL_JoystickOpen(0);
+            if (joystick) {
+                state.controllerConnected = true;
+                Logger::Log(LogLevel::Info, "Input",
+                            "Controller connected: " +
+                            std::string(SDL_JoystickName(joystick)));
+            }
+        }
     }
 
     // 4. Poll Keyboard

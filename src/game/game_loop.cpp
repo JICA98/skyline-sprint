@@ -4,8 +4,11 @@
 #include "audio/audio_manager.h"
 #include <iostream>
 #include <sstream>
+#include <math.h>
+#include <cstdio>
 
 Game::Game() : currentState(GameState::Boot), tickCount(0), currentSeed(0), accumulator(0.0f),
+               cameraX(0.0f), previousCameraX(0.0f), renderAlpha(0.0f),
                menuIndex(0), menuRepeatTimer(0), settingAudio(true), settingScreenShake(true),
                settingParticles(1), settingShowDiagnostics(false), settingCharacter(0), testModeAuto(false),
                testModeStress(false), testSeed(0xDEADC0DE), testSeedIndex(0),
@@ -42,8 +45,8 @@ bool Game::Init(SDL_Renderer* renderer, SDL_Window* window) {
     spacesuitIdleTex = Render::LoadTexture(renderer, "assets/images/spacesuit_idle.tga");
     spacesuitRunTex = Render::LoadTexture(renderer, "assets/images/spacesuit_run.tga");
     spacesuitJumpTex = Render::LoadTexture(renderer, "assets/images/spacesuit_jump.tga");
-    platformTex = Render::LoadTexture(renderer, "assets/images/platform.tga");
-    warningTex = Render::LoadTexture(renderer, "assets/images/warning.tga");
+    platformTex = Render::LoadTiledTexture(renderer, "assets/images/platform.tga", 1920, 480);
+    warningTex = Render::LoadTexture(renderer, "assets/images/warning.tga", false);
     shardTex = Render::LoadTexture(renderer, "assets/images/shard.tga");
     enemyTex = Render::LoadTexture(renderer, "assets/images/enemy.tga");
 
@@ -61,6 +64,8 @@ bool Game::Init(SDL_Renderer* renderer, SDL_Window* window) {
     shardsCollected = 0;
     activeSeed = currentSeed;
     cameraX = 0.0f;
+    previousCameraX = 0.0f;
+    renderAlpha = 0.0f;
     menuIndex = 0;
     menuRepeatTimer = 0;
     player.Reset(100.0f, 500.0f);
@@ -203,6 +208,8 @@ bool Game::RunFrame(SDL_Renderer* renderer, float frameDelta) {
                 multiplier = 1.0f;
                 shardsCollected = 0;
                 cameraX = 0.0f;
+                previousCameraX = 0.0f;
+                renderAlpha = 0.0f;
                 player.Reset(100.0f, 500.0f);
                 world.Reset(activeSeed, prng);
                 Logger::Log(LogLevel::Info, "Game", "Starting run with seed: " + std::to_string(activeSeed));
@@ -232,6 +239,8 @@ bool Game::RunFrame(SDL_Renderer* renderer, float frameDelta) {
                 multiplier = 1.0f;
                 shardsCollected = 0;
                 cameraX = 0.0f;
+                previousCameraX = 0.0f;
+                renderAlpha = 0.0f;
                 player.Reset(100.0f, 500.0f);
                 world.Reset(activeSeed, prng);
                 Logger::Log(LogLevel::Info, "Game", "Restarting run same seed.");
@@ -285,6 +294,8 @@ bool Game::RunFrame(SDL_Renderer* renderer, float frameDelta) {
             multiplier = 1.0f;
             shardsCollected = 0;
             cameraX = 0.0f;
+            previousCameraX = 0.0f;
+            renderAlpha = 0.0f;
             player.Reset(100.0f, 500.0f);
             world.Reset(activeSeed, prng);
             Logger::Log(LogLevel::Info, "Game", "Restarting run same seed: " + std::to_string(activeSeed));
@@ -307,6 +318,8 @@ bool Game::RunFrame(SDL_Renderer* renderer, float frameDelta) {
             multiplier = 1.0f;
             shardsCollected = 0;
             cameraX = 0.0f;
+            previousCameraX = 0.0f;
+            renderAlpha = 0.0f;
             player.Reset(100.0f, 500.0f);
             world.Reset(activeSeed, prng);
             Logger::Log(LogLevel::Info, "Game", "Restarting run with NEW seed: " + std::to_string(activeSeed));
@@ -326,7 +339,11 @@ bool Game::RunFrame(SDL_Renderer* renderer, float frameDelta) {
         accumulator -= dt;
     }
 
-    // 4. Render current scene
+    renderAlpha = accumulator / dt;
+    if (renderAlpha < 0.0f) renderAlpha = 0.0f;
+    if (renderAlpha > 1.0f) renderAlpha = 1.0f;
+
+    // 4. Render current scene. Presentation is handled centrally in main.cpp.
     RenderScene(renderer);
 
     return true;
@@ -357,6 +374,7 @@ void Game::UpdateSimulation() {
     }
 
     if (currentState == GameState::Gameplay) {
+        previousCameraX = cameraX;
         bool wasGrounded = player.grounded;
 
         // Update player physics state
@@ -436,6 +454,7 @@ void Game::UpdateSimulation() {
         // Rebase world origin if player X goes beyond 10,000 pixels
         if (player.x > 10000.0f) {
             world.Rebase(10000.0f, player, cameraX);
+            previousCameraX = cameraX;
             // Rebase active particles too
             for (int i = 0; i < MAX_PARTICLES; ++i) {
                 if (particles[i].active) {
@@ -510,7 +529,7 @@ void Game::RenderScene(SDL_Renderer* renderer) {
         case GameState::Title: {
             // Draw title text
             Render::DrawText(renderer, "SKYLINE SPRINT", safe.x + 100, safe.y + 150, 7, 0x22D3EE);
-            Render::DrawText(renderer, "Build ID: SkylineSprint-0.1.2-final", safe.x + 100, safe.y + 220, 2, 0x94A3B8);
+            Render::DrawText(renderer, "Build ID: SkylineSprint-0.1.3-perf", safe.x + 100, safe.y + 220, 2, 0x94A3B8);
 
             // Draw controller status
             bool controllerOk = Input::IsControllerConnected();
@@ -562,7 +581,7 @@ void Game::RenderScene(SDL_Renderer* renderer) {
         case GameState::Pause: {
             // Render underlying frozen gameplay in background
             world.Render(renderer, platformTex, warningTex, shardTex, enemyTex, cameraX);
-            player.Render(renderer, activePlayerTex, cameraX);
+            player.Render(renderer, activePlayerTex, cameraX, 0.0f, 1.0f);
 
             // Draw translucent dark overlay
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -680,7 +699,7 @@ void Game::RenderScene(SDL_Renderer* renderer) {
             Render::DrawText(renderer, "DIAGNOSTICS & SYSTEM METRICS", safe.x + 100, safe.y + 150, 5, 0x4ADE80);
 
             uint32_t uptimeSecs = SDL_GetTicks() / 1000;
-            Render::DrawText(renderer, "Build Identifier:   SkylineSprint-0.1.2-final", safe.x + 100, safe.y + 240, 3, 0xF8FAFC);
+            Render::DrawText(renderer, "Build Identifier:   SkylineSprint-0.1.3-perf", safe.x + 100, safe.y + 240, 3, 0xF8FAFC);
             Render::DrawText(renderer, "Target Toolchain:   OpenOrbis PS4 Toolchain (v0.5.4)", safe.x + 100, safe.y + 290, 3, 0xF8FAFC);
             #ifdef PS4
             Render::DrawText(renderer, "Target Platform:    Orbis OS (PlayStation 4 Homebrew)", safe.x + 100, safe.y + 340, 3, 0xF8FAFC);
@@ -748,29 +767,8 @@ void Game::RenderScene(SDL_Renderer* renderer) {
         line3 += testModeStress ? "| STRESS: ON" : "| STRESS: OFF";
         Render::DrawText(renderer, line3, safe.x + 20, safe.y + 150, 2, 0x22D3EE);
     }
-
-    // Flush queued draw commands and present the frame.
-    //
-    // On PS4 this renderer is created with SDL_CreateRenderer(window, ...,
-    // SDL_RENDERER_SOFTWARE). The OpenOrbis software renderer's present
-    // callback calls SDL_UpdateWindowSurface(), which copies the completed
-    // surface into VideoOut and submits the flip.
-    SDL_RenderPresent(renderer);
-
-#ifdef PS4
-    // Emit a small, bounded marker so logs prove that the fixed binary reached
-    // the present path. This is intentionally limited to the first three
-    // frames to avoid log spam.
-    static int ps4PresentMarkers = 0;
-    if (ps4PresentMarkers < 3) {
-        std::cout << "[PS4-FB-FINAL] Presented frame "
-                  << ps4PresentMarkers
-                  << ", tick=" << tickCount
-                  << ", state=" << GetStateName(currentState)
-                  << std::endl;
-        ++ps4PresentMarkers;
-    }
-#endif
+    // main.cpp owns the presentation path. Keeping it outside Game lets the
+    // PS4 build render into a small offscreen surface and upscale only once.
 }
 
 std::string Game::GetStateName(GameState state) const {
@@ -831,33 +829,38 @@ void Game::RenderParticles(SDL_Renderer* renderer, float cameraX) {
     if (settingParticles == 0) limit = 64;
     else if (settingParticles == 2) limit = 256;
 
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
     for (int i = 0; i < limit; ++i) {
-        if (particles[i].active) {
-            float px = particles[i].x - cameraX;
-            if (px < -10.0f || px > 1930.0f || particles[i].y < -10.0f || particles[i].y > 1090.0f) {
-                continue;
-            }
-
-            float alphaPct = particles[i].life / particles[i].maxLife;
-            int size = 6;
-            SDL_Rect dst = {
-                static_cast<int>(px - size/2),
-                static_cast<int>(particles[i].y - size/2),
-                size,
-                size
-            };
-
-            uint8_t r = (particles[i].color >> 16) & 0xFF;
-            uint8_t g = (particles[i].color >> 8) & 0xFF;
-            uint8_t b = particles[i].color & 0xFF;
-            uint8_t a = static_cast<uint8_t>(alphaPct * 255.0f);
-
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer, r, g, b, a);
-            SDL_RenderFillRect(renderer, &dst);
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        if (!particles[i].active) {
+            continue;
         }
+
+        const float px = particles[i].x - cameraX;
+        if (px < -10.0f || px > 1930.0f ||
+            particles[i].y < -10.0f || particles[i].y > 1090.0f) {
+            continue;
+        }
+
+        const float alphaPct = particles[i].life / particles[i].maxLife;
+        const int size = 6;
+        SDL_Rect dst = {
+            static_cast<int>(px - size / 2),
+            static_cast<int>(particles[i].y - size / 2),
+            size,
+            size
+        };
+
+        const uint8_t r = (particles[i].color >> 16) & 0xFF;
+        const uint8_t g = (particles[i].color >> 8) & 0xFF;
+        const uint8_t b = particles[i].color & 0xFF;
+        const uint8_t a = static_cast<uint8_t>(alphaPct * 255.0f);
+
+        SDL_SetRenderDrawColor(renderer, r, g, b, a);
+        SDL_RenderFillRect(renderer, &dst);
     }
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 }
 
 void Game::SpawnJumpTrail(float x, float y) {

@@ -31,7 +31,7 @@ public:
 
     float animTime;
 
-    void Render(SDL_Renderer* renderer, SDL_Texture* spriteTexture, float cameraX, float cameraY = 0.0f);
+    void Render(SDL_Renderer* renderer, SDL_Texture* spriteTexture, float cameraX, float cameraY = 0.0f, float alpha = 1.0f);
 };
 
 #endif // PLAYER_H

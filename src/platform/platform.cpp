@@ -1,7 +1,7 @@
 #include "platform.h"
 #include <iostream>
 
-const char* BUILD_ID = "SkylineSprint-0.1.2-final";
+const char* BUILD_ID = "SkylineSprint-0.1.3-perf";
 
 #ifdef PS4
 #include <orbis/libkernel.h>

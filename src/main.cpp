@@ -5,10 +5,36 @@
 #include "platform/platform.h"
 #include "game/game_loop.h"
 
-int main(int argc, char* argv[]) {
-    // Disable buffering
-    setvbuf(stdout, NULL, _IONBF, 0);
+namespace {
+constexpr double TARGET_FRAME_SECONDS = 1.0 / 60.0;
 
+void PaceFrame(Uint64 frameStart, Uint64 frequency) {
+#ifdef PS4
+    if (frequency == 0) {
+        return;
+    }
+
+    double elapsed = static_cast<double>(SDL_GetPerformanceCounter() - frameStart) /
+                     static_cast<double>(frequency);
+    double remaining = TARGET_FRAME_SECONDS - elapsed;
+
+    // VideoOut normally blocks on the flip. This fallback only engages when
+    // the host returns early, preventing an uncapped loop and uneven deltas.
+    if (remaining > 0.002) {
+        const Uint32 sleepMs =
+            static_cast<Uint32>((remaining - 0.001) * 1000.0);
+        if (sleepMs > 0) {
+            SDL_Delay(sleepMs);
+        }
+    }
+#else
+    (void)frameStart;
+    (void)frequency;
+#endif
+}
+}
+
+int main(int argc, char* argv[]) {
     int maxFrames = -1;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -28,6 +54,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Nearest-neighbour scaling is substantially cheaper for the PS4 software
+    // renderer and matches the retro pixel-art presentation.
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) != 0) {
         std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
         Platform_Shutdown();
@@ -35,10 +65,10 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "[INIT] SDL initialized" << std::endl;
 
+    SDL_Window* window = nullptr;
+    SDL_Renderer* renderer = nullptr;
+
 #ifdef PS4
-    // The OpenOrbis PS4 SDL video backend exposes its actual VideoOut mode as
-    // display 0. shadPS4 can expose 1280x720 even when the game's logical
-    // workspace is 1920x1080.
     int physicalWidth = 1920;
     int physicalHeight = 1080;
     SDL_DisplayMode displayMode{};
@@ -48,11 +78,11 @@ int main(int argc, char* argv[]) {
         physicalWidth = displayMode.w;
         physicalHeight = displayMode.h;
     } else {
-        std::cout << "[PS4-FB-FINAL] SDL_GetCurrentDisplayMode failed; "
+        std::cout << "[PS4-PERF] SDL_GetCurrentDisplayMode failed; "
                   << "falling back to 1920x1080: " << SDL_GetError() << std::endl;
     }
 
-    SDL_Window* window = SDL_CreateWindow(
+    window = SDL_CreateWindow(
         "Skyline Sprint",
         0,
         0,
@@ -69,78 +99,56 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::cout << "[PS4-FB-FINAL] Window created: pointer=" << (void*)window
-              << ", origin=0,0, requested=" << physicalWidth << "x" << physicalHeight
-              << std::endl;
-
-    // IMPORTANT:
-    // Bind the software renderer to the SDL_Window, not directly to an
-    // SDL_Surface. With the OpenOrbis SDL port, SDL_RenderPresent() then:
-    //   1. executes the queued software render commands,
-    //   2. calls SDL_UpdateWindowSurface(),
-    //   3. copies the surface to the registered VideoOut buffer,
-    //   4. submits the flip.
-    //
-    // SDL_CreateSoftwareRenderer(windowSurface) creates a surface-only
-    // renderer whose renderer->window is null, so its present callback cannot
-    // perform the PS4 window update by itself.
-    SDL_Renderer* renderer = SDL_CreateRenderer(
-        window,
-        -1,
-        SDL_RENDERER_SOFTWARE
-    );
-
-    if (!renderer) {
-        std::cerr << "Failed to create window-bound SDL software renderer on PS4: "
-                  << SDL_GetError() << std::endl;
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        Platform_Shutdown();
-        return 1;
-    }
-
-    SDL_RendererInfo rendererInfo{};
-    if (SDL_GetRendererInfo(renderer, &rendererInfo) == 0) {
-        std::cout << "[PS4-FB-FINAL] Renderer name="
-                  << (rendererInfo.name ? rendererInfo.name : "(null)")
-                  << ", flags=0x" << std::hex << rendererInfo.flags << std::dec
-                  << std::endl;
-    } else {
-        std::cout << "[PS4-FB-FINAL] SDL_GetRendererInfo failed: "
-                  << SDL_GetError() << std::endl;
-    }
-
-    int outputWidth = 0;
-    int outputHeight = 0;
-    if (SDL_GetRendererOutputSize(renderer, &outputWidth, &outputHeight) == 0) {
-        std::cout << "[PS4-FB-FINAL] Renderer output="
-                  << outputWidth << "x" << outputHeight << std::endl;
-    } else {
-        std::cout << "[PS4-FB-FINAL] SDL_GetRendererOutputSize failed: "
-                  << SDL_GetError() << std::endl;
-    }
-
     SDL_Surface* windowSurface = SDL_GetWindowSurface(window);
     if (!windowSurface) {
         std::cerr << "Failed to get PS4 window surface: "
                   << SDL_GetError() << std::endl;
-        SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
         Platform_Shutdown();
         return 1;
     }
 
-    std::cout << "[PS4-FB-FINAL] Window surface: pointer="
-              << (void*)windowSurface
-              << ", size=" << windowSurface->w << "x" << windowSurface->h
-              << ", format="
-              << SDL_GetPixelFormatName(windowSurface->format->format)
-              << ", pitch=" << windowSurface->pitch << std::endl;
+    // Render at half the physical width and height, then perform one nearest
+    // upscale into VideoOut. This cuts software-rendering pixel work to 25%.
+    // 1280x720 hosts use 640x360; 1920x1080 hosts use 960x540.
+    const int internalWidth = (physicalWidth >= 1280) ? physicalWidth / 2 : physicalWidth;
+    const int internalHeight = (physicalHeight >= 720) ? physicalHeight / 2 : physicalHeight;
 
+    SDL_Surface* renderSurface = SDL_CreateRGBSurfaceWithFormat(
+        0,
+        internalWidth,
+        internalHeight,
+        32,
+        windowSurface->format->format
+    );
+
+    if (!renderSurface) {
+        std::cerr << "Failed to create PS4 low-resolution render surface: "
+                  << SDL_GetError() << std::endl;
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        Platform_Shutdown();
+        return 1;
+    }
+
+    renderer = SDL_CreateSoftwareRenderer(renderSurface);
+    if (!renderer) {
+        std::cerr << "Failed to create PS4 software renderer: "
+                  << SDL_GetError() << std::endl;
+        SDL_FreeSurface(renderSurface);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        Platform_Shutdown();
+        return 1;
+    }
+
+    std::cout << "[PS4-PERF] VideoOut=" << physicalWidth << "x" << physicalHeight
+              << ", internal=" << internalWidth << "x" << internalHeight
+              << ", format=" << SDL_GetPixelFormatName(windowSurface->format->format)
+              << std::endl;
 #else
-    // Create window (1920x1080) for desktop
-    SDL_Window* window = SDL_CreateWindow(
+    window = SDL_CreateWindow(
         "Skyline Sprint",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
@@ -155,17 +163,14 @@ int main(int argc, char* argv[]) {
         Platform_Shutdown();
         return 1;
     }
-    std::cout << "[INIT] Window created: pointer=" << (void*)window << ", size=1920x1080" << std::endl;
 
-    // Create renderer (try accelerated first, fall back to software/default)
-    SDL_Renderer* renderer = SDL_CreateRenderer(
+    renderer = SDL_CreateRenderer(
         window,
         -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
     );
 
     if (!renderer) {
-        std::cout << "Accelerated renderer failed, falling back to default renderer..." << std::endl;
         renderer = SDL_CreateRenderer(window, -1, 0);
     }
 
@@ -176,47 +181,74 @@ int main(int argc, char* argv[]) {
         Platform_Shutdown();
         return 1;
     }
-    std::cout << "[INIT] Software renderer created: pointer=" << (void*)renderer << std::endl;
 #endif
 
-    // Initialize game
     Game game;
     if (!game.Init(renderer, window)) {
         std::cerr << "Failed to initialize game logic!" << std::endl;
         SDL_DestroyRenderer(renderer);
+#ifdef PS4
+        SDL_FreeSurface(renderSurface);
+#endif
         SDL_DestroyWindow(window);
         SDL_Quit();
         Platform_Shutdown();
         return 1;
     }
 
-    std::cout << "[INIT] Textures loaded" << std::endl;
-    std::cout << "[INIT] Fonts loaded" << std::endl;
-    std::cout << "[INIT] Game state initialized" << std::endl;
-    std::cout << "[INIT] Entering main loop" << std::endl;
+    std::cout << "[INIT] Game initialized; entering main loop" << std::endl;
 
-    // Main loop
     bool running = true;
-    uint32_t lastTicks = SDL_GetTicks();
+    Uint64 performanceFrequency = SDL_GetPerformanceFrequency();
+    if (performanceFrequency == 0) {
+        performanceFrequency = 1000;
+    }
+    Uint64 lastCounter = SDL_GetPerformanceCounter();
     int frameCount = 0;
 
     while (running) {
-        uint32_t currentTicks = SDL_GetTicks();
-        float delta = static_cast<float>(currentTicks - lastTicks) / 1000.0f;
-        lastTicks = currentTicks;
+        const Uint64 frameStart = SDL_GetPerformanceCounter();
+        float delta = static_cast<float>(
+            static_cast<double>(frameStart - lastCounter) /
+            static_cast<double>(performanceFrequency)
+        );
+        lastCounter = frameStart;
 
-        // Run frame simulation and rendering
         running = game.RunFrame(renderer, delta);
 
-        frameCount++;
-        if (maxFrames > 0 && frameCount >= maxFrames) {
-            std::cout << "Reached target frame count of " << maxFrames << ". Exiting loop." << std::endl;
+#ifdef PS4
+        // Flush software commands into the small internal surface.
+        SDL_RenderPresent(renderer);
+
+        // One optimized nearest-neighbour upscale and one VideoOut submission.
+        if (SDL_BlitScaled(renderSurface, nullptr, windowSurface, nullptr) != 0) {
+            std::cerr << "[PS4-PERF] SDL_BlitScaled failed: "
+                      << SDL_GetError() << std::endl;
             running = false;
+        } else if (SDL_UpdateWindowSurface(window) != 0) {
+            std::cerr << "[PS4-PERF] SDL_UpdateWindowSurface failed: "
+                      << SDL_GetError() << std::endl;
+            running = false;
+        }
+#else
+        SDL_RenderPresent(renderer);
+#endif
+
+        ++frameCount;
+        if (maxFrames > 0 && frameCount >= maxFrames) {
+            running = false;
+        }
+
+        if (running) {
+            PaceFrame(frameStart, performanceFrequency);
         }
     }
 
     game.Shutdown();
     SDL_DestroyRenderer(renderer);
+#ifdef PS4
+    SDL_FreeSurface(renderSurface);
+#endif
     SDL_DestroyWindow(window);
     SDL_Quit();
     Platform_Shutdown();

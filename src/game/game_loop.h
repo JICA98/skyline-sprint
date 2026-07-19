@@ -58,6 +58,8 @@ private:
     Player player;
     World world;
     float cameraX;
+    float previousCameraX;
+    float renderAlpha;
     int score;
     int highScore;
     float distanceTraveled;

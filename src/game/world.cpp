@@ -5,10 +5,12 @@
 #include "audio/audio_manager.h"
 #include <math.h>
 #include <iostream>
+#include <algorithm>
 
 using namespace PhysicsTuning;
 
 World::World() : fallbackCount(0), lastGeneratedX(0.0f), nextChunkIndex(0) {
+    activeChunks.reserve(MAX_ACTIVE_CHUNKS);
 }
 
 void World::Reset(uint32_t seed, Random& prng) {
@@ -20,6 +22,9 @@ void World::Reset(uint32_t seed, Random& prng) {
 
     // Generate initial safe chunk (Index 0)
     Chunk startChunk;
+    startChunk.platforms.reserve(8);
+    startChunk.shards.reserve(16);
+    startChunk.drones.reserve(4);
     startChunk.index = nextChunkIndex++;
     startChunk.startX = 0.0f;
     // Flat safe starting zone
@@ -57,6 +62,9 @@ void World::Update(float playerX, Random& prng) {
 
 void World::GenerateChunk(int index, float startX, Random& prng) {
     Chunk chunk;
+    chunk.platforms.reserve(8);
+    chunk.shards.reserve(16);
+    chunk.drones.reserve(4);
     chunk.index = index;
     chunk.startX = startX;
 
@@ -343,78 +351,93 @@ void World::Rebase(float offset, Player& player, float& cameraX) {
     }
 }
 
-void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex, SDL_Texture* warningTex, SDL_Texture* shardTex, SDL_Texture* enemyTex, float cameraX, float cameraY) {
+void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex,
+                   SDL_Texture* warningTex, SDL_Texture* shardTex,
+                   SDL_Texture* enemyTex, float cameraX, float cameraY) {
+    constexpr int VIEW_W = SCREEN_WIDTH;
+    constexpr int VIEW_H = SCREEN_HEIGHT;
+
     for (const auto& chunk : activeChunks) {
-        // Draw platforms
         for (const auto& plat : chunk.platforms) {
-            // Cull offscreen platforms to improve draw speed
-            if (plat.box.x + plat.box.w < cameraX || plat.box.x > cameraX + 1920) {
+            const float screenLeftF = plat.box.x - cameraX;
+            const float screenTopF = plat.box.y - cameraY;
+            const float screenRightF = screenLeftF + plat.box.w;
+            const float screenBottomF = screenTopF + plat.box.h;
+
+            if (screenRightF <= 0.0f || screenLeftF >= VIEW_W ||
+                screenBottomF <= 0.0f || screenTopF >= VIEW_H) {
                 continue;
             }
 
-            SDL_Rect dstRect = {
-                static_cast<int>(plat.box.x - cameraX),
-                static_cast<int>(plat.box.y - cameraY),
-                static_cast<int>(plat.box.w),
-                static_cast<int>(plat.box.h)
-            };
+            const int left = std::max(0, static_cast<int>(screenLeftF));
+            const int top = std::max(0, static_cast<int>(screenTopF));
+            const int right = std::min(VIEW_W, static_cast<int>(screenRightF));
+            const int bottom = std::min(VIEW_H, static_cast<int>(screenBottomF));
+            const int visibleW = right - left;
+            const int visibleH = bottom - top;
 
-            SDL_Texture* tex = plat.isHazard ? warningTex : platformTex;
-            
-            // Draw tiled or stretched texture
-            if (plat.isHazard) {
-                // Warning patterns are stretched
-                SDL_RenderCopy(renderer, tex, NULL, &dstRect);
-            } else {
-                // Rooftop platforms: tile the platform tile horizontally
-                int tileWidth = 32;
-                int tileHeight = 32;
-                int cols = static_cast<int>(plat.box.w) / tileWidth;
-                int rows = static_cast<int>(plat.box.h) / tileHeight;
-
-                for (int r = 0; r < rows; ++r) {
-                    for (int c = 0; c < cols; ++c) {
-                        SDL_Rect tileDst = {
-                            static_cast<int>(plat.box.x - cameraX) + c * tileWidth,
-                            static_cast<int>(plat.box.y - cameraY) + r * tileHeight,
-                            tileWidth,
-                            tileHeight
-                        };
-                        SDL_RenderCopy(renderer, tex, NULL, &tileDst);
-                    }
-                }
+            if (visibleW <= 0 || visibleH <= 0) {
+                continue;
             }
+
+            SDL_Rect visibleRect = { left, top, visibleW, visibleH };
+
+            if (plat.isHazard) {
+                // Hazards are small; a single stretched copy is inexpensive.
+                SDL_RenderCopy(renderer, warningTex, nullptr, &visibleRect);
+                continue;
+            }
+
+            // platformTex is pre-tiled once during initialization. Sampling
+            // the corresponding region preserves the updated artwork while
+            // reducing a 1920x480 rooftop from about 900 blits to one.
+            const int sourceX = std::max(
+                0, left - static_cast<int>(screenLeftF));
+            const int sourceY = std::max(
+                0, top - static_cast<int>(screenTopF));
+            SDL_Rect sourceRect = {
+                sourceX,
+                sourceY,
+                visibleW,
+                visibleH
+            };
+            SDL_RenderCopy(renderer, platformTex, &sourceRect, &visibleRect);
         }
 
-        // Draw collectibles (shards)
         for (const auto& shard : chunk.shards) {
             if (!shard.active) continue;
-            if (shard.box.x + shard.box.w < cameraX || shard.box.x > cameraX + 1920) {
+
+            const float sx = shard.box.x - cameraX;
+            const float sy = shard.box.y - cameraY;
+            if (sx + shard.box.w < -32.0f || sx > VIEW_W + 32.0f ||
+                sy + shard.box.h < -32.0f || sy > VIEW_H + 32.0f) {
                 continue;
             }
 
             SDL_Rect dstRect = {
-                static_cast<int>(shard.box.x - cameraX - 8.0f),
-                static_cast<int>(shard.box.y - cameraY - 8.0f),
+                static_cast<int>(sx - 8.0f),
+                static_cast<int>(sy - 8.0f),
                 32,
                 32
             };
-            SDL_RenderCopy(renderer, shardTex, NULL, &dstRect);
+            SDL_RenderCopy(renderer, shardTex, nullptr, &dstRect);
         }
 
-        // Draw hover drones
         for (const auto& drone : chunk.drones) {
-            if (drone.box.x + drone.box.w < cameraX || drone.box.x > cameraX + 1920) {
+            const float sx = drone.box.x - cameraX;
+            const float sy = drone.box.y - cameraY;
+            if (sx + drone.box.w < -64.0f || sx > VIEW_W + 64.0f ||
+                sy + drone.box.h < -64.0f || sy > VIEW_H + 64.0f) {
                 continue;
             }
 
             SDL_Rect dstRect = {
-                static_cast<int>(drone.box.x - cameraX - 16.0f),
-                static_cast<int>(drone.box.y - cameraY - 16.0f),
+                static_cast<int>(sx - 16.0f),
+                static_cast<int>(sy - 16.0f),
                 64,
                 64
             };
-            SDL_RenderCopy(renderer, enemyTex, NULL, &dstRect);
+            SDL_RenderCopy(renderer, enemyTex, nullptr, &dstRect);
         }
     }
 }

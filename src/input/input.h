@@ -53,6 +53,7 @@ private:
     static SDL_Joystick* joystick;
     static bool useHeadlessInput;
     static bool headlessState[static_cast<int>(InputAction::Count)];
+    static uint32_t lastConnectionPollTick;
 };
 
 #endif // INPUT_H
