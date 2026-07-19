@@ -45,7 +45,7 @@ bool Game::Init(SDL_Renderer* renderer, SDL_Window* window) {
     spacesuitIdleTex = Render::LoadTexture(renderer, "assets/images/spacesuit_idle.tga");
     spacesuitRunTex = Render::LoadTexture(renderer, "assets/images/spacesuit_run.tga");
     spacesuitJumpTex = Render::LoadTexture(renderer, "assets/images/spacesuit_jump.tga");
-    platformTex = Render::LoadTiledTexture(renderer, "assets/images/platform.tga", 1920, 480);
+    platformTex = Render::LoadPlatformTexture(renderer, "assets/images/platform.tga");
     warningTex = Render::LoadTexture(renderer, "assets/images/warning.tga", false);
     shardTex = Render::LoadTexture(renderer, "assets/images/shard.tga");
     enemyTex = Render::LoadTexture(renderer, "assets/images/enemy.tga");

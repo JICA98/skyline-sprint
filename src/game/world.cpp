@@ -357,6 +357,13 @@ void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex,
     constexpr int VIEW_W = SCREEN_WIDTH;
     constexpr int VIEW_H = SCREEN_HEIGHT;
 
+    int platformTextureW = 0;
+    int platformTextureH = 0;
+    if (platformTex) {
+        SDL_QueryTexture(platformTex, nullptr, nullptr,
+                         &platformTextureW, &platformTextureH);
+    }
+
     for (const auto& chunk : activeChunks) {
         for (const auto& plat : chunk.platforms) {
             const float screenLeftF = plat.box.x - cameraX;
@@ -388,18 +395,52 @@ void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex,
                 continue;
             }
 
-            // platformTex is pre-tiled once during initialization. Sampling
-            // the corresponding region preserves the updated artwork while
-            // reducing a 1920x480 rooftop from about 900 blits to one.
-            const int sourceX = std::max(
-                0, left - static_cast<int>(screenLeftF));
-            const int sourceY = std::max(
-                0, top - static_cast<int>(screenTopF));
+            // The texture has already been cropped to its visible artwork.
+            // Stretch one complete sprite across the whole physics platform.
+            // Mapping the clipped destination back into texture space keeps
+            // partially off-screen platforms correctly clipped without
+            // truncating the art at the top or bottom.
+            const int textureW = platformTextureW;
+            const int textureH = platformTextureH;
+            if (textureW <= 0 || textureH <= 0) {
+                continue;
+            }
+
+            const float clippedLeft =
+                static_cast<float>(left) - screenLeftF;
+            const float clippedTop =
+                static_cast<float>(top) - screenTopF;
+
+            // Thin floating slabs use only the roof portion of the platform
+            // artwork instead of squeezing the entire building into 30-50 px.
+            const bool isThinSlab = plat.box.h <= 100.0f;
+            const int sourceBaseHeight = isThinSlab
+                ? std::max(1, textureH / 4)
+                : textureH;
+
+            int sourceX = static_cast<int>(
+                (clippedLeft / plat.box.w) * textureW);
+            int sourceY = static_cast<int>(
+                (clippedTop / plat.box.h) * sourceBaseHeight);
+            int sourceW = static_cast<int>(
+                (static_cast<float>(visibleW) / plat.box.w) * textureW + 0.5f);
+            int sourceH = static_cast<int>(
+                (static_cast<float>(visibleH) / plat.box.h) *
+                sourceBaseHeight + 0.5f);
+
+            sourceX = std::max(0, std::min(sourceX, textureW - 1));
+            sourceY = std::max(0, std::min(sourceY,
+                                           sourceBaseHeight - 1));
+            sourceW = std::max(1, std::min(sourceW,
+                                           textureW - sourceX));
+            sourceH = std::max(1, std::min(sourceH,
+                                           sourceBaseHeight - sourceY));
+
             SDL_Rect sourceRect = {
                 sourceX,
                 sourceY,
-                visibleW,
-                visibleH
+                sourceW,
+                sourceH
             };
             SDL_RenderCopy(renderer, platformTex, &sourceRect, &visibleRect);
         }

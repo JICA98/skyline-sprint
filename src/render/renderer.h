@@ -26,11 +26,11 @@ public:
                                     const std::string& relativePath,
                                     bool useAlpha = true);
 
-    // Builds a large repeated texture once at startup. This replaces hundreds
-    // of per-frame tile draw calls with one SDL_RenderCopy per platform.
-    static SDL_Texture* LoadTiledTexture(SDL_Renderer* renderer,
-                                         const std::string& relativePath,
-                                         int width, int height);
+    // Loads the platform artwork and removes empty/near-black canvas around
+    // it. The resulting texture contains only the visible platform sprite, so
+    // its top edge can be aligned exactly with the physics collider.
+    static SDL_Texture* LoadPlatformTexture(SDL_Renderer* renderer,
+                                            const std::string& relativePath);
 
     static SDL_Rect GetSafeArea();
 
