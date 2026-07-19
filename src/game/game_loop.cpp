@@ -529,7 +529,7 @@ void Game::RenderScene(SDL_Renderer* renderer) {
         case GameState::Title: {
             // Draw title text
             Render::DrawText(renderer, "SKYLINE SPRINT", safe.x + 100, safe.y + 150, 7, 0x22D3EE);
-            Render::DrawText(renderer, "Build ID: SkylineSprint-0.1.3-perf", safe.x + 100, safe.y + 220, 2, 0x94A3B8);
+            Render::DrawText(renderer, "Build ID: SkylineSprint-0.1.5-ui-polish", safe.x + 100, safe.y + 220, 2, 0x94A3B8);
 
             // Draw controller status
             bool controllerOk = Input::IsControllerConnected();
@@ -559,12 +559,22 @@ void Game::RenderScene(SDL_Renderer* renderer) {
             break;
         }
         case GameState::Gameplay: {
-            float renderCamX = cameraX + shakeOffsetX;
-            float renderCamY = shakeOffsetY;
+            // Interpolate camera with the same alpha used for player position.
+            // Without this, platforms appear to slide left/right relative to the
+            // player when sprinting because the sprite is lerped but the world
+            // was rendered at the post-simulation camera.
+            const float renderCamX =
+                previousCameraX + (cameraX - previousCameraX) * renderAlpha +
+                shakeOffsetX;
+            const float renderCamY = shakeOffsetY;
 
-            world.Render(renderer, platformTex, warningTex, shardTex, enemyTex, renderCamX, renderCamY);
+            world.Render(renderer, platformTex, warningTex, shardTex, enemyTex,
+                         renderCamX, renderCamY);
             RenderParticles(renderer, renderCamX);
-            player.Render(renderer, activePlayerTex, renderCamX, renderCamY);
+            // Soft additive under-glow (neon aura) then the sprite itself
+            player.RenderGlow(renderer, renderCamX, renderCamY, renderAlpha);
+            player.Render(renderer, activePlayerTex, renderCamX, renderCamY,
+                          renderAlpha);
             
             // Render HUD metrics
             Render::DrawText(renderer, "SCORE: " + std::to_string(score), safe.x + 40, safe.y + 40, 5, 0xFACC15);
@@ -699,7 +709,7 @@ void Game::RenderScene(SDL_Renderer* renderer) {
             Render::DrawText(renderer, "DIAGNOSTICS & SYSTEM METRICS", safe.x + 100, safe.y + 150, 5, 0x4ADE80);
 
             uint32_t uptimeSecs = SDL_GetTicks() / 1000;
-            Render::DrawText(renderer, "Build Identifier:   SkylineSprint-0.1.3-perf", safe.x + 100, safe.y + 240, 3, 0xF8FAFC);
+            Render::DrawText(renderer, "Build Identifier:   SkylineSprint-0.1.5-ui-polish", safe.x + 100, safe.y + 240, 3, 0xF8FAFC);
             Render::DrawText(renderer, "Target Toolchain:   OpenOrbis PS4 Toolchain (v0.5.4)", safe.x + 100, safe.y + 290, 3, 0xF8FAFC);
             #ifdef PS4
             Render::DrawText(renderer, "Target Platform:    Orbis OS (PlayStation 4 Homebrew)", safe.x + 100, safe.y + 340, 3, 0xF8FAFC);
@@ -829,7 +839,9 @@ void Game::RenderParticles(SDL_Renderer* renderer, float cameraX) {
     if (settingParticles == 0) limit = 64;
     else if (settingParticles == 2) limit = 256;
 
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    // Additive blending makes neon trails / dust / pickups glow instead of
+    // just alpha-fading. Works on both the PS4 software renderer and desktop.
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
 
     for (int i = 0; i < limit; ++i) {
         if (!particles[i].active) {
@@ -843,24 +855,38 @@ void Game::RenderParticles(SDL_Renderer* renderer, float cameraX) {
         }
 
         const float alphaPct = particles[i].life / particles[i].maxLife;
-        const int size = 6;
-        SDL_Rect dst = {
-            static_cast<int>(px - size / 2),
-            static_cast<int>(particles[i].y - size / 2),
-            size,
-            size
-        };
-
         const uint8_t r = (particles[i].color >> 16) & 0xFF;
         const uint8_t g = (particles[i].color >> 8) & 0xFF;
         const uint8_t b = particles[i].color & 0xFF;
-        const uint8_t a = static_cast<uint8_t>(alphaPct * 255.0f);
 
-        SDL_SetRenderDrawColor(renderer, r, g, b, a);
-        SDL_RenderFillRect(renderer, &dst);
+        // Soft outer glow (larger, lower intensity)
+        {
+            const int size = 12;
+            SDL_Rect outer = {
+                static_cast<int>(px - size / 2),
+                static_cast<int>(particles[i].y - size / 2),
+                size, size
+            };
+            const uint8_t a = static_cast<uint8_t>(alphaPct * 70.0f);
+            SDL_SetRenderDrawColor(renderer, r, g, b, a);
+            SDL_RenderFillRect(renderer, &outer);
+        }
+
+        // Bright core
+        {
+            const int size = 5;
+            SDL_Rect core = {
+                static_cast<int>(px - size / 2),
+                static_cast<int>(particles[i].y - size / 2),
+                size, size
+            };
+            const uint8_t a = static_cast<uint8_t>(alphaPct * 220.0f);
+            SDL_SetRenderDrawColor(renderer, r, g, b, a);
+            SDL_RenderFillRect(renderer, &core);
+        }
     }
 
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 }
 
 void Game::SpawnJumpTrail(float x, float y) {

@@ -32,6 +32,8 @@ public:
     float animTime;
 
     void Render(SDL_Renderer* renderer, SDL_Texture* spriteTexture, float cameraX, float cameraY = 0.0f, float alpha = 1.0f);
+    // Soft additive neon aura drawn under the sprite (uses current blend state)
+    void RenderGlow(SDL_Renderer* renderer, float cameraX, float cameraY = 0.0f, float alpha = 1.0f);
 };
 
 #endif // PLAYER_H

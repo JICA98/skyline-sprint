@@ -165,3 +165,38 @@ void Player::Render(SDL_Renderer* renderer, SDL_Texture* spriteTexture,
                          0.0, nullptr, SDL_FLIP_HORIZONTAL);
     }
 }
+
+void Player::RenderGlow(SDL_Renderer* renderer, float cameraX, float cameraY,
+                        float alpha) {
+    if (!alive) return;
+
+    if (alpha < 0.0f) alpha = 0.0f;
+    if (alpha > 1.0f) alpha = 1.0f;
+
+    const float renderX = prevX + (x - prevX) * alpha;
+    const float renderY = prevY + (y - prevY) * alpha;
+
+    // Soft additive neon aura (cyan). Drawn as concentric filled rects
+    // approximating a glow; works on both software and accelerated renderers.
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
+
+    const int cx = static_cast<int>(renderX - cameraX + w * 0.5f);
+    const int cy = static_cast<int>(renderY - cameraY + h * 0.5f);
+
+    // Outer soft halo
+    SDL_SetRenderDrawColor(renderer, 34, 211, 238, 28);
+    SDL_Rect outer = { cx - 28, cy - 30, 56, 60 };
+    SDL_RenderFillRect(renderer, &outer);
+
+    // Mid glow
+    SDL_SetRenderDrawColor(renderer, 34, 211, 238, 55);
+    SDL_Rect mid = { cx - 18, cy - 20, 36, 40 };
+    SDL_RenderFillRect(renderer, &mid);
+
+    // Core bright
+    SDL_SetRenderDrawColor(renderer, 103, 232, 249, 90);
+    SDL_Rect core = { cx - 10, cy - 12, 20, 24 };
+    SDL_RenderFillRect(renderer, &core);
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+}

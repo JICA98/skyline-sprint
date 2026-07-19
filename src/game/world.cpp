@@ -455,6 +455,18 @@ void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex,
                 continue;
             }
 
+            // Additive soft glow under the shard (neon pickup)
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
+            const int cx = static_cast<int>(sx + shard.box.w * 0.5f);
+            const int cy = static_cast<int>(sy + shard.box.h * 0.5f);
+            SDL_SetRenderDrawColor(renderer, 250, 204, 21, 50);
+            SDL_Rect glowOuter = { cx - 18, cy - 18, 36, 36 };
+            SDL_RenderFillRect(renderer, &glowOuter);
+            SDL_SetRenderDrawColor(renderer, 253, 224, 71, 90);
+            SDL_Rect glowInner = { cx - 10, cy - 10, 20, 20 };
+            SDL_RenderFillRect(renderer, &glowInner);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
             SDL_Rect dstRect = {
                 static_cast<int>(sx - 8.0f),
                 static_cast<int>(sy - 8.0f),
@@ -471,6 +483,15 @@ void World::Render(SDL_Renderer* renderer, SDL_Texture* platformTex,
                 sy + drone.box.h < -64.0f || sy > VIEW_H + 64.0f) {
                 continue;
             }
+
+            // Additive thruster glow under the drone
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
+            const int cx = static_cast<int>(sx + drone.box.w * 0.5f);
+            const int cy = static_cast<int>(sy + drone.box.h + 4.0f);
+            SDL_SetRenderDrawColor(renderer, 34, 211, 238, 70);
+            SDL_Rect thruster = { cx - 14, cy - 6, 28, 14 };
+            SDL_RenderFillRect(renderer, &thruster);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
             SDL_Rect dstRect = {
                 static_cast<int>(sx - 16.0f),

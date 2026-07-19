@@ -1,7 +1,7 @@
 #include "platform.h"
 #include <iostream>
 
-const char* BUILD_ID = "SkylineSprint-0.1.4-platform-align";
+const char* BUILD_ID = "SkylineSprint-0.1.5-ui-polish";
 
 #ifdef PS4
 #include <orbis/libkernel.h>
